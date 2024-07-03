@@ -34,7 +34,13 @@ class FilepondController extends BaseController
      */
     public function upload(Request $request)
     {
-        $input = $request->file(config('filepond.input_name'));
+        $gcProbability = config('filepond.gc_probability', 10);
+        if (is_int($gcProbability) && random_int(1, 100) <= $gcProbability) {
+            $this->doGarbageCollector();
+        }
+
+        $inputName = $request->post('input_name') ?? config('filepond.input_name');
+        $input = $request->file($inputName);
 
         if ($input === null) {
             return $this->handleChunkInitialization($request);
@@ -200,17 +206,64 @@ class FilepondController extends BaseController
      */
     public function delete(Request $request)
     {
+        $temporaryFilesPath = config('filepond.temporary_files_path');
+        $disk = Storage::disk(config('filepond.temporary_files_disk', 'local'));
+
         $filePath = $this->filepond->getPathFromServerId($request->getContent());
         $folderPath = dirname($filePath);
-        if (Storage::disk(config('filepond.temporary_files_disk', 'local'))->deleteDirectory($folderPath)) {
-            return Response::make('', 200, [
-                'Content-Type' => 'text/plain',
-            ]);
+        
+        if ($folderPath === $temporaryFilesPath) {
+            // delete chunked file
+            $uploadId = str_replace($temporaryFilesPath.\DIRECTORY_SEPARATOR, '', $filePath);
+            $chunkFolder = config('filepond.chunks_path').DIRECTORY_SEPARATOR.$uploadId;
+            if (
+                $disk->delete($filePath) &&
+                $disk->deleteDirectory($chunkFolder)
+            ) {
+                return Response::make('', 200, [
+                    'Content-Type' => 'text/plain',
+                ]);
+            }
+        } else {
+            // delete standard file
+            if ($disk->deleteDirectory($folderPath)) {
+                return Response::make('', 200, [
+                    'Content-Type' => 'text/plain',
+                ]);
+            }
         }
+
 
         return Response::make('', 500, [
             'Content-Type' => 'text/plain',
         ]);
+    }
+
+
+
+    /**
+     * Get files uploaded to the temporary folder that was never used and delete them
+     *
+     * @return void
+     */
+    private function doGarbageCollector()
+    {
+        $limit = config('filepond.gc_max_file_minutes_age', 60);
+        if (!is_int($limit) || $limit < 0) {
+            return;
+        }
+        $limit = Carbon::now()->subMinutes($limit)->timestamp;
+        $disk = Storage::disk(config('filepond.temporary_files_disk', 'local'));
+        $path = config('filepond.temporary_files_path');
+        $chunkPath = config('filepond.chunks_path');
+        $directories = collect($disk->directories($path))
+            ->merge($disk->directories($chunkPath))
+            ->filter(fn($dir) => $dir != $chunkPath)
+            ->filter(fn($dir) => $disk->lastModified($dir) < $limit);
+
+        foreach ($directories as $directory) {
+            $disk->deleteDirectory($directory);
+        }
     }
 }
 
