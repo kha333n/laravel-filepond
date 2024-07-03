@@ -6,6 +6,7 @@ use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Contracts\Filesystem\FileNotFoundException;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller as BaseController;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Response;
 use Illuminate\Support\Facades\Storage;
@@ -31,6 +32,7 @@ class FilepondController extends BaseController
      * @param Request $request
      *
      * @return \Illuminate\Http\Response
+     * @throws Random\RandomException
      */
     public function upload(Request $request)
     {
@@ -148,7 +150,6 @@ class FilepondController extends BaseController
      * @param $basePath
      * @param $length
      * @param $finalFilePath
-     * @throws FileNotFoundException
      */
     private function persistFileIfDone($disk, $basePath, $length, $finalFilePath)
     {
@@ -202,7 +203,7 @@ class FilepondController extends BaseController
      *
      * @param Request $request
      *
-     * @return mixed
+     * @return \Illuminate\Http\Response
      */
     public function delete(Request $request)
     {
@@ -246,7 +247,7 @@ class FilepondController extends BaseController
      *
      * @return void
      */
-    private function doGarbageCollector()
+    public function doGarbageCollector()
     {
         $limit = config('filepond.gc_max_file_minutes_age', 60);
         if (!is_int($limit) || $limit < 0) {
