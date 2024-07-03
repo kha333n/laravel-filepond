@@ -26,7 +26,7 @@
 Require this package in the `composer.json` of your Laravel project.
 
 ```bash
-composer require sopamo/laravel-filepond
+composer require kha333n/laravel-filepond
 ```
 
 If you need to edit the configuration, you can publish it with:
